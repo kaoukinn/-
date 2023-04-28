@@ -30,7 +30,7 @@ stock_code_mapping = {
     "00713": "元大高息低波高股息"
     # 可以添加更多的股票代码和名称映射
 }
-
+# 獲取股票代號
 def stock_price_search(event):
     try:
         line_bot_api.reply_message(
@@ -40,6 +40,7 @@ def stock_price_search(event):
     except LineBotApiError as e:
         print(e)
 
+# 取得匯率資訊
 def get_currency_template():
     return ButtonsTemplate(
         title='查詢匯率',
@@ -63,6 +64,33 @@ def get_currency_template():
             )
         ]
     )
+
+# 取得天氣資訊
+def get_weather_info(text):
+    url = "https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-C0032-001"
+    params = {
+            "Authorization": "CWB-496A8CF2-1587-49DD-AD0E-FB54EC524B0C",
+            "locationName": f"{text}",
+        }
+    data = requests.get(url, params=params)
+    data_json = data.json()
+    location = data_json["records"]["location"]
+
+    city = location[0]['locationName']
+    wx8 = location[0]['weatherElement'][0]['time'][0]['parameter']['parameterName']
+    maxt8 = location[0]['weatherElement'][4]['time'][0]['parameter']['parameterName']
+    mint8 = location[0]['weatherElement'][2]['time'][0]['parameter']['parameterName']
+    ci8 = location[0]['weatherElement'][3]['time'][0]['parameter']['parameterName']
+    pop8 = location[0]['weatherElement'][1]['time'][0]['parameter']['parameterName']
+    
+    # 使用 TextSendMessage() 函式來建立訊息物件
+    message = TextSendMessage(text=f'{city}未來天氣{wx8}，最高溫度 {maxt8} 度，最低溫度 {mint8} 度，降雨機率 {pop8} %')
+    
+    # 回傳訊息物件
+    return message
+    
+
+citylist = ['宜蘭縣', '花蓮縣', '臺東縣', '澎湖縣', '金門縣', '連江縣', '臺北市', '新北市', '桃園市', '臺中市', '臺南市', '高雄市', '基隆市', '新竹縣', '新竹市', '苗栗縣', '彰化縣', '南投縣', '雲林縣', '嘉義縣', '嘉義市', '屏東縣']
 
 @app.route("/", methods=['POST'])
 def callback():
@@ -89,7 +117,14 @@ def handle_message(event):
         message = TemplateSendMessage(alt_text='查詢匯率', template=button_template)
         # 使用Line Messaging API的reply_message功能，向使用者回覆Button Template
         line_bot_api.reply_message(event.reply_token, message)
-
+    elif text == "查詢天氣":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請輸入您要查詢的縣市名稱")
+        )
+    elif text in citylist:
+        message = get_weather_info(text)
+        line_bot_api.reply_message(event.reply_token, message)
     elif text in stock_code_mapping:
         # 股票查詢
         stock_code = text
