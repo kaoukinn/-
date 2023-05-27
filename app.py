@@ -14,7 +14,8 @@ import string
 import pymysql
 import pandas as pd
 import openpyxl
-from function import get_dollar, get_stock, get_weather
+from function import get_dollar, get_stock, get_weather,get_dollar_name
+from database import deposit,withdraw, check_balance
 
 app = Flask(__name__, static_url_path='/static')
 UPLOAD_FOLDER = 'static'
@@ -25,16 +26,16 @@ config.read('config.ini')
 
 line_bot_api = LineBotApi(config.get('line-bot', 'channel_access_token'))
 handler = WebhookHandler(config.get('line-bot', 'channel_secret'))
-my_line_id = config.get('line-bot', 'my_line_id')
-end_point = config.get('line-bot', 'end_point')
-line_login_id = config.get('line-bot', 'line_login_id')
-line_login_secret = config.get('line-bot', 'line_login_secret')
-my_phone = config.get('line-bot', 'my_phone')
-google_map_key = config.get('line-bot', 'google_map_key')
-google_map_url = config.get('line-bot', 'google_map_url')
-id_file_name = './recommendation/id_list.xlsx' # File name
-sheet_name = 'worksheet1' # 4th sheet
-sheet_header = 0 # The header is the 2nd row
+# my_line_id = config.get('line-bot', 'my_line_id')
+# end_point = config.get('line-bot', 'end_point')
+# line_login_id = config.get('line-bot', 'line_login_id')
+# line_login_secret = config.get('line-bot', 'line_login_secret')
+# my_phone = config.get('line-bot', 'my_phone')
+# google_map_key = config.get('line-bot', 'google_map_key')
+# google_map_url = config.get('line-bot', 'google_map_url')
+# id_file_name = './recommendation/id_list.xlsx' # File name
+# sheet_name = 'worksheet1' # 4th sheet
+# sheet_header = 0 # The header is the 2nd row
 
 
 #http的HEADER
@@ -42,7 +43,7 @@ HEADER = {
     'Content-type': 'application/json',
     'Authorization': F'Bearer {config.get("line-bot", "channel_access_token")}'
 }
-state, date, stime, etime, customer_list = {}, None , None, None, []
+state, account, stime, etime, customer_list = {}, None , None, None, []
 @app.route("/", methods=['POST', 'GET'])
 def index():
     # state = None
@@ -68,7 +69,7 @@ def index():
 
                 if text == "匯率查詢":
                     state[userid] = {"status": "getdollar"}
-                    payload["messages"] = [{"type": "text","text": "請輸入貨幣代號 (ex.USD)："}]
+                    payload["messages"] = [get_dollar_name()]
                 elif state.get(userid) and state[userid]["status"] == "getdollar":
                     payload["messages"] = [get_dollar(text)]
                     del state[userid]
@@ -85,19 +86,48 @@ def index():
                     payload["messages"] = [get_stock(text)]
                     del state[userid]
 
-                elif text == "":
-                    payload["messages"] = [()]
-                elif text == " ":
-                    payload["messages"] = []
-                elif text == " ":
-                    payload["messages"] = []   
-                else:
-                    payload["messages"] = [
-                            {
-                                "type": "text",
-                                "text": text
-                            }
-                        ]
+                elif text == "記帳":
+                    state[userid] = {"status": "bookkeeping"}
+                    payload["messages"] = [{"type": "text","text": "請輸入要執行的動作 (查詢餘額、提款、存款):"}]
+                elif state.get(userid) and state[userid]["status"] == "bookkeeping":
+                    if text == "查詢餘額":
+                        payload["messages"] = [{"type": "text", "text": "請輸入要查詢的帳戶 :"}]
+                        state[userid]["status"] = "check_balance"
+                    elif text == "提款":
+                        payload["messages"] = [{"type": "text", "text": "請輸入要提款的帳戶 :"}]
+                        state[userid]["status"] = "withdraw"
+                    elif text == "存款":
+                        payload["messages"] = [{"type": "text", "text": "請輸入要存入的帳戶 :"}]
+                        state[userid]["status"] = "addmoney"
+
+                elif state.get(userid) and state[userid]["status"] == "withdraw":
+                    account = text
+                    state[userid]["account"] = account
+                    payload["messages"] = [{"type": "text", "text": "請輸入提款金額 :"}]
+                    state[userid]["status"] = "withdraw_amount"
+                elif state.get(userid) and state[userid]["status"] == "withdraw_amount":
+                    amount = float(text)
+                    account = state[userid]["account"]
+                    result = withdraw(account, amount)
+                    payload["messages"] = [{"type": "text", "text": result}]
+                    del state[userid]
+                elif state.get(userid) and state[userid]["status"] == "check_balance":
+                    account = text
+                    result = check_balance(account)
+                    payload["messages"] = [{"type": "text", "text": result}]
+                    del state[userid]
+                elif state.get(userid) and state[userid]["status"] == "addmoney":
+                    account = text
+                    state[userid]["account"] = account
+                    payload["messages"] = [{"type": "text", "text": "請輸入要存入金額 :"}]
+                    state[userid]["status"] = "addmoney_amount"
+                elif state.get(userid) and state[userid]["status"] == "addmoney_amount":
+                    amount = float(text)
+                    account = state[userid]["account"]
+                    result = deposit(account, amount)
+                    payload["messages"] = [{"type": "text", "text": result}]
+                    del state[userid]
+                    
                 replyMessage(payload)
             
             # 處理座標訊息
