@@ -159,3 +159,75 @@ def get_weather(city_name):
 # city = input("請輸入要查詢的縣市名稱: ")
 # result = get_weather(city)
 # print(result)
+# 尋找停車場功能
+def get_parking_lots(latitude, longitude):
+    # 使用 Google Maps API 搜尋目標座標半徑500公尺內的停車場
+    url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+    params = {
+        'location': f'{latitude},{longitude}',
+        'radius': 1000,
+        'keyword': '停車場',
+        'type': 'parking',
+        'language': 'zh-TW',
+        'key': 'AIzaSyAm2daNnuoTdVsIKke-4MhvQ6qFTTg7IKE'
+    }
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if len(data['results']) == 0:
+        # 如果找不到停車場，回覆「附近沒有停車場」的訊息
+        message = {'type': 'text', 'text': '附近沒有停車場'}
+    else:
+        columns = []
+        for item in data['results'][:5]:
+            column = {
+                'title': item['name'],
+                'text': item['vicinity'],
+                'actions': [
+                    {'type': 'uri', 'label': '在地圖上檢視', 'uri': f"https://www.google.com.tw/maps/place/?q=place_id:{item['place_id']}"},
+                ]
+            }
+            columns.append(column)
+        carousel_template = {'type': 'carousel', 'columns': columns}
+        message = {
+            'type': 'template',
+            'altText': '以下是附近的停車場：',
+            'template': carousel_template
+        }
+
+    return message
+
+# 我的功能
+def store_information():
+    message = {
+    "type": "template",
+    "altText": "This is a buttons template",
+    "template": {
+        "type": "buttons",
+        "title": "個人功能",
+        "text": "請點選需要的功能",
+        "actions": [
+        {
+            "type": "uri",
+            "label": '附近停車場',
+            "uri": 'line://nv/location'
+        },
+        {
+            "type": "message",
+            "label": '匯率查詢',
+            "text": '匯率查詢'
+        },
+        {
+            "type": "message",
+            "label": '股價查詢',
+            "text": '股價查詢'
+        },
+        {
+            "type": "message",
+            "label": '天氣查詢',
+            "text": '天氣查詢'
+        },
+        ]
+    }
+}
+    return message

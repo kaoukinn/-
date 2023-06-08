@@ -14,7 +14,8 @@ import string
 import pymysql
 import pandas as pd
 import openpyxl
-from function import get_dollar, get_stock, get_weather,get_dollar_name
+from googlemaps import Client
+from function import *
 from database import deposit,withdraw, check_balance
 
 app = Flask(__name__, static_url_path='/static')
@@ -31,11 +32,12 @@ handler = WebhookHandler(config.get('line-bot', 'channel_secret'))
 # line_login_id = config.get('line-bot', 'line_login_id')
 # line_login_secret = config.get('line-bot', 'line_login_secret')
 # my_phone = config.get('line-bot', 'my_phone')
-# google_map_key = config.get('line-bot', 'google_map_key')
+google_map_key = config.get('line-bot', 'google_map_key')
 # google_map_url = config.get('line-bot', 'google_map_url')
 # id_file_name = './recommendation/id_list.xlsx' # File name
 # sheet_name = 'worksheet1' # 4th sheet
 # sheet_header = 0 # The header is the 2nd row
+gmaps = Client(key=google_map_key)
 
 
 #http的HEADER
@@ -79,6 +81,8 @@ def index():
                 elif state.get(userid) and state[userid]["status"] == "getweather":
                     payload["messages"] = [get_weather(text)]
                     del state[userid]
+                elif text == "我的功能":
+                     payload["messages"] = [store_information()]
                 elif text == "股價查詢":
                     state[userid] = {"status": "getstock"}
                     payload["messages"] = [{"type": "text","text": "請輸入要查詢的股票代號 (ex.2330):"}]
@@ -134,7 +138,7 @@ def index():
             elif events[0]["message"]["type"] == "location":
                 latitude = events[0]["message"]["latitude"]
                 longitude = events[0]["message"]["longitude"]
-                payload["messages"] = [get_navigation(latitude, longitude)]
+                payload["messages"] = [get_parking_lots(latitude, longitude)]
                 replyMessage(payload)
         
         elif events[0]["type"] == "postback":
@@ -174,6 +178,36 @@ def pushMessage(payload):
     response = requests.post("https://api.line.me/v2/bot/message/push",headers=HEADER,json=payload)
     print(response.text)
     return 'OK'
+
+def get_navigation(latitude, longitude):
+    # 目標地址，這裡可以自己設定
+    target_address = "新北市板橋區雙十路二段130巷2弄80號"
+
+    # 使用 Google Maps Platform 的 Geocoding API 將目標地址轉換為座標
+    target_location = gmaps.geocode(target_address)[0]['geometry']['location']
+    target_latitude = target_location['lat']
+    target_longitude = target_location['lng']
+
+    # 使用 Google Maps Platform 的 Distance Matrix API 計算當前使用者座標和目標座標之間的距離和時間
+    directions_result = gmaps.directions(
+        (latitude, longitude),
+        (target_latitude, target_longitude),
+        mode="driving",
+        language="zh-TW"
+    )
+    # 獲取路線總長度和總時間
+    distance_km = directions_result[0]['legs'][0]['distance']['text']
+    duration_min = directions_result[0]['legs'][0]['duration']['text']
+
+    # 取得導航連結
+    navi_link = f"https://www.google.com/maps/dir/?api=1&destination={target_address}"
+
+    # 回傳導航訊息
+    message = {
+        "type": "text",
+        "text": f"請點擊以下連結開啟 Google 導航：\n{navi_link}\n預計距離：{distance_km}，預計行車時間：{duration_min}"
+    }
+    return message
 
 @app.route("/callback", methods=['POST'])
 def callback():
